@@ -8,8 +8,14 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-puppeteer.launch({headless: false}).then(async browser => {
+puppeteer.launch({headless: true}).then(async browser => {
     const page = await browser.newPage()
+
+    await page.setViewport({
+        width: 1820, // Ширина вікна в пікселях
+        height: 980, // Висота вікна в пікселях
+        deviceScaleFactor: 1, // Масштаб сторінки
+      });
 
     // await page.goto('https://bot.sannysoft.com')
     // await page.waitForTimeout(5000)
@@ -17,7 +23,22 @@ puppeteer.launch({headless: false}).then(async browser => {
 
     let goods = []
 
+    await page.setRequestInterception(true);
+
     let url = 'https://tabletki.ua/uk/category/674/'
+
+    page.on('request', request => {
+        // console.log('Request:', request.url());
+        request.continue();
+    });
+
+    let locationsData = null
+
+    page.on('response', async response => {
+        if (response.url().includes('/ajax/cards/locations')) {
+            locationsData = await response.text(); // Присвоєння змінній, якщо потрібно
+        }
+    });
 
     await page.goto(url, { waitUntil: 'load' });
 
@@ -76,7 +97,7 @@ puppeteer.launch({headless: false}).then(async browser => {
         }
     }
 
-    console.log(goods)
+    // console.log(goods)
 
     // async function clickShowMoreIfAvailable(page) {
     //     const showMoreButton = await page.$('#showMoreResults');
@@ -92,7 +113,11 @@ puppeteer.launch({headless: false}).then(async browser => {
     // }
 
     for (const good of goods){
-        await page.goto(good.link, {waitUntil: 'load'});
+        await page.goto(good.link, {waitUntil: 'networkidle2'});
+        await sleep(2000)
+
+        console.log(locationsData)
+        console.log('-------------')
 
         // while (!(await page.$eval('#showMoreResults', button => button.disabled))) {
         //     try {
@@ -150,5 +175,5 @@ puppeteer.launch({headless: false}).then(async browser => {
     console.log('end!')
 
 
-    // await browser.close()
+    await browser.close()
 })
