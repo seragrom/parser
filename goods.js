@@ -139,7 +139,7 @@ async function getPrices() {
     const startTime = new Date();
     logToFile(`Зафіксовано час запуску програми: ${moment(startTime).format('DD.MM.YYYY HH:mm')}`);
 
-    const goods = await fetchGoodsLink([
+    let goods = await fetchGoodsLink([
         6496, 3518, 1665, 10048, 11731, 6985, 1066030, 1007865, 6808, 16034,
         1954, 22658, 12885, 36788, 36018, 21335, 15757, 437, 36320, 12802,
         1395, 1031415, 46, 25554, 36247, 27105, 3377, 30026, 4363, 8317,
@@ -153,49 +153,20 @@ async function getPrices() {
         12584, 12187
     ]);
 
-    let goods_failed = [];
 
-    try {
-        for (const [index, good] of goods.entries()) {
-
-            let percents = {
-                20: Number(goods.length * 0.2).toFixed(),
-                40: Number(goods.length * 0.4).toFixed(),
-                60: Number(goods.length * 0.6).toFixed(),
-                80: Number(goods.length * 0.8).toFixed(),
-                100: Number(goods.length).toFixed(),
-            };
-
-            const percentComplete = Object.entries(percents).find(([key, value]) => value === (index + 1).toString());
-
-            if (percentComplete) {
-                const [foundKey, foundValue] = percentComplete;
-                console.log(`Оброблено: ${foundKey}%, Препаратів: ${foundValue}/${goods.length}`);
-            }
-
+    while (goods.length > 0) {
+        for (let i = 0; i < goods.length; i++) {
+            const good = goods[i];
+            console.log(`Обробка препаратів, залишилось: ${goods.length}`)
             try {
                 await insertPrices(good);
+                goods.splice(i, 1);
+                i--;
             } catch (error) {
-                goods_failed.push(good);
+                logToFile(`Error processing good ${good}:`, error);
                 await sleep(10000);
             }
-
         }
-
-        if (goods_failed.length > 0) {
-            for (const [index, good] of goods_failed.entries()) {
-                console.log(`Повторна обробка проблемних посилань: ${(index + 1)}/${goods_failed.length}`);
-                try {
-                    await insertPrices(good);
-                } catch (error) {
-                    await sleep(10000);
-                }
-
-            }
-        }
-    } catch (error) {
-        console.log(error);
-        logToFile(error);
     }
     logToFile(`Час виконання програми: ${((new Date() - startTime) / 3600000).toFixed(2)} годин.`);
     logToFile(`Всього оброблено: ${goods.length} препаратів.`);
