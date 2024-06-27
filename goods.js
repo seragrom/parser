@@ -25,12 +25,12 @@ async function insertPrices(good) {
     const page = await browser.newPage();
 
     await page.setViewport({
-        width: 1820,
-        height: 980,
+        width: 1920,
+        height: 1080,
         deviceScaleFactor: 1,
     });
 
-    let locationsData = null;
+    let locationsData = {};
 
     try {
         await page.setRequestInterception(true);
@@ -40,8 +40,12 @@ async function insertPrices(good) {
         });
 
         page.on('response', async response => {
-            if (response.url().includes('/ajax/cards/locations')) {
-                locationsData = await response.json();
+            try {
+                if (response.url().includes('/ajax/cards/locations')) {
+                    locationsData = await response.json();
+                }
+            } catch (error) {
+                console.error(`Error processing response: ${error}`);
             }
         });
 
@@ -62,7 +66,7 @@ async function insertPrices(good) {
                             "LOCATION": location.location,
                             "GOODSID": good.INTCODE,
                             "PRICESUMMIN": location.priceSumMin,
-                            "PHARMACY_CNT": 0
+                            "IDCITY": good.IDCITY
                         })
                     )
             })
@@ -105,14 +109,14 @@ async function insertPrices(good) {
             })
         });
     } catch (error) {
-        // console.error('Error:', error);
         throw error;
     } finally {
+        await page.close();
         await browser.close();
     }
 }
 
-async function fetchGoodsLink(goods) {
+async function fetchLinks(method) {
     try {
         const response = await fetch('http://127.0.0.1:8000/tabletki/', {
             method: 'POST',
@@ -121,15 +125,12 @@ async function fetchGoodsLink(goods) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                "METHOD": "GET_GOODS_LINK",
-                "GOODS_INTCODE": goods
+                "METHOD": method
             })
         });
-
         return await response.json();
 
     } catch (error) {
-        console.error(error);
         logToFile(error)
     }
 }
@@ -139,28 +140,24 @@ async function getPrices() {
     const startTime = new Date();
     logToFile(`Зафіксовано час запуску програми: ${moment(startTime).format('DD.MM.YYYY HH:mm')}`);
 
-    let goods = await fetchGoodsLink([
-        6496, 3518, 1665, 10048, 11731, 6985, 1066030, 1007865, 6808, 16034,
-        1954, 22658, 12885, 36788, 36018, 21335, 15757, 437, 36320, 12802,
-        1395, 1031415, 46, 25554, 36247, 27105, 3377, 30026, 4363, 8317,
-        10011, 2630, 3353, 36087, 9080, 9680, 5635, 33970, 6129, 4003,
-        26822, 2776, 13726, 10835, 2948, 11413, 30011, 2790, 13887, 15172,
-        12908, 5457, 10676, 6405, 30032, 31904, 32865, 1257, 3880, 1003554,
-        24688, 27043, 1051332, 6357, 31459, 8670, 9305, 4375, 26907, 34063,
-        1010759, 14929, 12102, 23462, 3316, 2215, 31440, 29089, 67, 12270,
-        33798, 16702, 2506, 5172, 14037, 7646, 1025460, 15960, 36044,
-        1003332, 12353, 11504, 34507, 16610, 4077, 15812, 12635, 4689,
-        12584, 12187
-    ]);
 
+    const cities = await fetchLinks('GET_CITIES_LINK');
+    const goods = await fetchLinks('GET_GOODS_LINK');
 
-    while (goods.length > 0) {
-        for (let i = 0; i < goods.length; i++) {
-            const good = goods[i];
-            console.log(`Обробка препаратів, залишилось: ${goods.length}`)
+    for (const city of cities){
+        console.log(`Обробка препаратів у місті: ${city.NAME}`)
+        let goods_parsed = Array.from(goods)
+        let goods_success = 0
+        while (goods_parsed.length > 0) {
+        for (let i = 0; i < goods_parsed.length; i++) {
+            const good = goods_parsed[i];
+            good.IDCITY = city.IDCITY
+            good.LINK += (city.HREFNAME + '/')
+            console.log(`Обробка препаратів, залишилось: ${goods_parsed.length}`)
             try {
                 await insertPrices(good);
-                goods.splice(i, 1);
+                goods_parsed.splice(i, 1);
+                goods_success += 1
                 i--;
             } catch (error) {
                 logToFile(`Error processing good ${good}:`, error);
@@ -168,8 +165,10 @@ async function getPrices() {
             }
         }
     }
+
+    }
     logToFile(`Час виконання програми: ${((new Date() - startTime) / 3600000).toFixed(2)} годин.`);
-    logToFile(`Всього оброблено: ${goods.length} препаратів.`);
+    logToFile(`Всього оброблено: ${goods_success} препаратів.`);
 }
 
 getPrices();
