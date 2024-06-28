@@ -46,12 +46,13 @@ async function insertPrices(good) {
                 }
             } catch (error) {
                 console.error(`Error processing response: ${error}`);
+                throw error;
             }
         });
 
         await page.goto(good.LINK, {waitUntil: 'networkidle2'});
 
-        await fetch('http://127.0.0.1:8000/tabletki/', {
+        await fetch('https://exc.apteka.org.ua/tabletki/', {
             method: 'POST',
             headers: {
                 'Authorization': `Basic ${btoa(`${'tabletki'}:${'Aichove7'}`)}`,
@@ -76,39 +77,44 @@ async function insertPrices(good) {
 
         let pharmacies = [];
 
-        for (const pharmacyHandle of pharmacyHandles) {
+        try {
+            for (const pharmacyHandle of pharmacyHandles) {
 
-            const locationHandle = await pharmacyHandle.$('div.address-card__header.address-card__header--block');
-            const nameHandle = await pharmacyHandle.$('.address-card__header--name span');
-            const addressHandle = await pharmacyHandle.$('.address-card__header--address span');
+                const locationHandle = await pharmacyHandle.$('div.address-card__header.address-card__header--block');
+                const nameHandle = await pharmacyHandle.$('.address-card__header--name span');
+                const addressHandle = await pharmacyHandle.$('.address-card__header--address span');
 
-            const dataId = await locationHandle.evaluate(el => el.getAttribute('data-id'));
-            const dataLocation = await locationHandle.evaluate(el => el.getAttribute('data-location'));
-            const pharmacyName = await nameHandle.evaluate(el => el.textContent.trim());
-            const pharmacyAddress = await addressHandle.evaluate(el => el.textContent.trim());
+                const dataId = await locationHandle.evaluate(el => el.getAttribute('data-id'));
+                const dataLocation = await locationHandle.evaluate(el => el.getAttribute('data-location'));
+                const pharmacyName = await nameHandle.evaluate(el => el.textContent.trim());
+                const pharmacyAddress = await addressHandle.evaluate(el => el.textContent.trim());
 
-            pharmacies.push(
-                {
-                    "INTCODE": dataId,
-                    "PHARMACYNAME": pharmacyName,
-                    "ADDRESS": pharmacyAddress,
-                    "LOCATION": dataLocation
-                }
-            );
+                pharmacies.push(
+                    {
+                        "INTCODE": dataId,
+                        "PHARMACYNAME": pharmacyName,
+                        "ADDRESS": pharmacyAddress,
+                        "LOCATION": dataLocation
+                    }
+                );
+            }
+
+            await fetch('https://exc.apteka.org.ua/tabletki/', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Basic ${btoa(`${'tabletki'}:${'Aichove7'}`)}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    "METHOD": "UPDATE_PHARMACY",
+                    "PHARMACIES": pharmacies
+                })
+            });
+        } catch (error){
+            console.log(error)
         }
-
-        await fetch('http://127.0.0.1:8000/tabletki/', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Basic ${btoa(`${'tabletki'}:${'Aichove7'}`)}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                "METHOD": "UPDATE_PHARMACY",
-                "PHARMACIES": pharmacies
-            })
-        });
     } catch (error) {
+        await page.screenshot({path: 'testresult.png', fullPage: true})
         throw error;
     } finally {
         await page.close();
@@ -118,7 +124,7 @@ async function insertPrices(good) {
 
 async function fetchLinks(method) {
     try {
-        const response = await fetch('http://127.0.0.1:8000/tabletki/', {
+        const response = await fetch('https://exc.apteka.org.ua/tabletki/', {
             method: 'POST',
             headers: {
                 'Authorization': `Basic ${btoa(`${'tabletki'}:${'Aichove7'}`)}`,
@@ -150,7 +156,7 @@ async function getPrices() {
         let goods_success = 0
         while (goods_parsed.length > 0) {
         for (let i = 0; i < goods_parsed.length; i++) {
-            const good = goods_parsed[i];
+            const good = {...goods_parsed[i]};
             good.IDCITY = city.IDCITY
             good.LINK += (city.HREFNAME + '/')
             console.log(`Обробка препаратів, залишилось: ${goods_parsed.length}`)
@@ -160,7 +166,7 @@ async function getPrices() {
                 goods_success += 1
                 i--;
             } catch (error) {
-                logToFile(`Error processing good ${good}:`, error);
+                logToFile(error);
                 await sleep(10000);
             }
         }
@@ -168,7 +174,6 @@ async function getPrices() {
 
     }
     logToFile(`Час виконання програми: ${((new Date() - startTime) / 3600000).toFixed(2)} годин.`);
-    logToFile(`Всього оброблено: ${goods_success} препаратів.`);
 }
 
 getPrices();
